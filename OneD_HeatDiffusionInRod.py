@@ -36,7 +36,7 @@ class TempDistribution:
         if Tguess == None:
             Tguess = np.zeros(inner_grid_points)
 
-        # checkingthevalueofSpforconsistency
+        # checking the value of Sp for consistency
         if self.Sp <= 0.0:
 
             while (noConvergence == True):
