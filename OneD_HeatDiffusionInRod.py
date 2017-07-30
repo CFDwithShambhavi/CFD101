@@ -3,38 +3,39 @@ import numpy as np
 
 
 class TempDistribution:
-    def __init__(self, no_of_CV=5, len_of_rod=10.0, kw=400.0, ke=400.0, source=[3.0, 0.0, -4.0], \
-                 T_x_w=373.0, T_x_e=573.0, heat_flux=10.0):
+    def __init__(self, no_of_CV = 0, len_of_rod = 0.0, kw = 0.0, ke = 0.0, source = [0.0, 0.0, 0.0], \
+                 bc = dict(T1 = (0.0,0), T2 = (0.0,0), q = (0.0)), h = 0.0, amb_T = 0.0):
 
         self.no_of_CV = no_of_CV
         self.len_of_rod = len_of_rod
         self.kw = kw
         self.ke = ke
+        self.h = h #heat transfer coeff.
+        self.amb_T = amb_T #ambient temp.
         # Linear source term of the form S = Sc+SpTp where Sp should be (-)ve
         self.Sc1 = source[0]
         self.Sc2 = source[1]
         self.Sp = source[2]
         # ....................
-        self.T_x_w = T_x_w
-        self.T_x_e = T_x_e
-        self.q = heat_flux
+        self.bc = bc
 
-    def temp_distribution(self, Tguess=None, BC='Drichlet'):
+    def temp_distribution(self, Tguess = None, large_num = 1e+10):
 
+        global matrix
         delta_x = self.len_of_rod / self.no_of_CV  # width of each inner CV
         delta_x_e = delta_x
         delta_x_w = delta_x
 
-        no_of_grid_points = self.no_of_CV + 2
         inner_grid_points = self.no_of_CV
+        no_of_grid_points = self.no_of_CV + 2
 
-        solution = np.zeros(inner_grid_points)
+        solution = np.zeros(no_of_grid_points)
 
         noConvergence = True
 
         # assigning some default value to Tguess if it is not provided by the user
         if Tguess == None:
-            Tguess = np.zeros(inner_grid_points)
+            Tguess = np.zeros(no_of_grid_points)
 
         # checking the value of Sp for consistency
         if self.Sp <= 0.0:
@@ -42,63 +43,76 @@ class TempDistribution:
             while (noConvergence == True):
 
                 # these values and data structures will be re-initialised in every iteration
-                matrix = []
-                residue = np.zeros(inner_grid_points)
-                b = np.zeros(inner_grid_points)
+                matrix = np.zeros((no_of_grid_points, no_of_grid_points))
+                residue = np.zeros(no_of_grid_points)
+                b = np.zeros(no_of_grid_points)
                 convergence_count = 0
                 # .......................................................
 
-                for i in range(0, self.no_of_CV):  # loop over CVs
+                for i in range(0, no_of_grid_points):  # loop over grid points within each CV
 
-                    a = np.zeros(inner_grid_points)
+                    a = np.zeros(no_of_grid_points)
 
-                    if i == 0:  # west side outer CV
+                    if i == 0: # west side boundary grid point
 
-                        a[i + 1] = (self.ke / delta_x_e) * (-1)
-                        a[i] = (self.ke / delta_x_e) + (self.kw / (delta_x_w / 2.0)) - self.Sp * delta_x
+                        a[i] = (self.ke / (delta_x_e / 2.0)) - self.Sp * (delta_x / 2.0)
+                        a[i + 1] = (self.ke / (delta_x_e / 2.0)) * (-1)
 
-                        b[i] = (self.Sc1 + self.Sc2 * Tguess[i]) * delta_x + (self.kw / (delta_x_w / 2.0)) * self.T_x_w
+                        b[i] = (self.Sc1 + self.Sc2 * Tguess[i]) * (delta_x / 2.0)
 
-                    elif i == (inner_grid_points - 1):  # east side outer CV
+                    elif i == (no_of_grid_points - 1):  # east side boundary grid point
 
-                        if BC == 'Drichlet':
+                        a[i] = (self.kw / (delta_x_w / 2.0)) - self.Sp * (delta_x / 2.0)
+                        a[i - 1] = (self.kw / (delta_x_w / 2.0)) * (-1)
 
-                            a[i - 1] = (self.kw / delta_x_w) * (-1)
-                            a[i] = (self.kw / delta_x_w) + (self.ke / (delta_x_e / 2.0)) - self.Sp * delta_x
+                        b[i] = (self.Sc1 + self.Sc2 * Tguess[i]) * (delta_x / 2.0)
 
-                            b[i] = (self.Sc1 + self.Sc2 * Tguess[i]) * delta_x + (self.ke / (
-                            delta_x_e / 2.0)) * self.T_x_e
+                    else:  # inner grid points within inner CVs
 
-                        elif BC == 'Neumann':
+                        del_x_w = delta_x_w
+                        del_x_e = delta_x_e
 
-                            del_x = delta_x
-                            del_x_w = delta_x_w
+                        if i == 1:
+                            del_x_w = delta_x_w / 2.0
+                        elif i == no_of_grid_points - 2:
+                            del_x_e = delta_x_e / 2.0
 
-                            if self.q != 0.0:  # then divide the east side last CV into half to capture gradient in temp.
-                                del_x = delta_x / 2.0
-                                del_x_w = delta_x_w / 4.0
-
-                            a[i - 1] = (self.kw / del_x_w) * (-1)
-                            a[i] = (self.kw / del_x_w) - (self.Sp * del_x)
-
-                            b[i] = (self.Sc1 + self.Sc2 * Tguess[i]) * (del_x) - self.q
-
-                    else:  # inner CVs
-
-                        a[i - 1] = (self.kw / delta_x_w) * (-1)
-                        a[i] = (self.kw / delta_x_w) + (self.ke / delta_x_e) - self.Sp * delta_x
-                        a[i + 1] = (self.ke / delta_x_e) * (-1)
+                        a[i - 1] = (self.kw / del_x_w) * (-1)
+                        a[i] = (self.kw / del_x_w) + (self.ke / del_x_e) - self.Sp * delta_x
+                        a[i + 1] = (self.ke / del_x_e) * (-1)
 
                         b[i] = (self.Sc1 + self.Sc2 * Tguess[i]) * delta_x
 
-                    matrix.append(a)
+                    matrix[i] = a
 
-                solution = np.linalg.solve(np.array(matrix), b)  # NumPy method to solve system of linear eqns.
+                #boundary condition implementation:
+                for k, v in self.bc.items():
+                    if (k == 'T1' or k == 'T2') and v[0] != 0.0: # Drichlet
+                        index = v[1]
+                        matrix[index][index] += large_num
+                        b[index] = v[0] * (large_num / matrix[index][index])
+                        matrix[index] /= matrix[index][index]
+
+                    elif k == 'q' and (self.bc['T1'][0] == 0.0 or self.bc['T2'][0] == 0.0):
+                        index = v[1]
+                        if index == 0 or index == (no_of_grid_points - 1): # Neumann
+                            if v[0] != 0.0 and self.h == 0.0:
+                                b[index] = b[index] + self.q
+
+                            elif v[0] == 0.0 and self.h != 0.0 and self.amb_T != 0.0: # Mixed type
+                                b[index] = b[index] + self.h * self.amb_T
+                                matrix[index][index] += self.h
+
+                        else:
+                            raise ValueError('heat flux can only be applied at outermost grid points !!')
+
+                solution = np.linalg.solve(matrix, b)  # NumPy method to solve system of linear eqns.
 
                 # calculating residues in every iteration for each grid point within CVs
-                for j in range(inner_grid_points):
+                for j in range(no_of_grid_points):
                     residue[j] = abs(solution[j] - Tguess[j])
-                # print (residue)
+
+                print ('residue : ',residue)
 
                 # checking convergence.........
                 for j in range(len(residue)):
@@ -106,7 +120,7 @@ class TempDistribution:
                     if residue[j] < 0.01:
                         convergence_count += 1
 
-                if convergence_count == inner_grid_points:
+                if convergence_count == no_of_grid_points:
 
                     noConvergence = False
 
@@ -115,7 +129,7 @@ class TempDistribution:
                     Tguess = solution  # now solution becomes Tguess for the next iteration
                     # ............................
         else:
-            raise ValueError('Value of Sp should be negative for physical consistency of the discretisation')
+            raise ValueError('Value of Sp should be negative for physical consistency of the discretisation !!')
 
         return (solution)
 
@@ -126,12 +140,11 @@ class TempDistribution:
 
 
 
-t_d = TempDistribution(no_of_CV=5, len_of_rod=1.0, kw=1.0, ke=1.0, source=[500.0, 0.0, -25.0], T_x_w=100.0,
-                       heat_flux=0.0)
-solution = t_d.temp_distribution(BC='Neumann')
-# solution=solution[:]-273.0
+t_d = TempDistribution(no_of_CV = 17, len_of_rod = 1.0, kw = 1.0, ke = 1.0, source = [500.0, 25.0, -50.0], \
+                 bc = dict(T1 = (100.0,0), T2 = (0.0,16), q = (0.0,18)))
+solution = t_d.temp_distribution()
 print(solution)
-X = np.linspace(0, 1, 5)
+X = np.linspace(0, 1.0, 19)
 Y = solution
 plt.plot(X, Y)
 plt.show()
