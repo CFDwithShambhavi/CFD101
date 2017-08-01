@@ -81,7 +81,7 @@ class TempDistribution:
 
                         b[i] = (self.Sc1 + self.Sc2 * guess_T[i]) * delta_x
 
-                    matrix[i] = a
+                    matrix[i] = a[:]
 
                 #boundary condition implementation:
                 for k, v in self.bc.items():
@@ -119,7 +119,7 @@ class TempDistribution:
 
                 else:
 
-                    guess_T = solution  # now solution becomes guess_T for the next iteration
+                    guess_T = solution[:]  # now solution becomes guess_T for the next iteration
                     # ............................
         else:
             raise ValueError('Value of Sp should be negative for physical consistency of the discretisation !!')
@@ -138,6 +138,6 @@ t_d = TempDistribution(no_of_CV = 17, len_of_rod = 1.0, kw = 1.0, ke = 1.0, sour
 solution = t_d.temp_distribution()
 print(solution)
 X = np.linspace(0, 1.0, 19)
-Y = solution
+Y = solution[:]
 plt.plot(X, Y)
 plt.show()
