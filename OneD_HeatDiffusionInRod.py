@@ -19,7 +19,7 @@ class TempDistribution:
         # ....................
         self.bc = bc
 
-    def temp_distribution(self, Tguess = None, large_num = 1e+10):
+    def temp_distribution(self, guess_T = None, large_num = 1e+10):
 
         global matrix
         delta_x = self.len_of_rod / self.no_of_CV  # width of each inner CV
@@ -31,11 +31,9 @@ class TempDistribution:
 
         solution = np.zeros(no_of_grid_points)
 
-        noConvergence = True
-
         # assigning some default value to Tguess if it is not provided by the user
-        if Tguess == None:
-            Tguess = np.zeros(no_of_grid_points)
+        if guess_T == None:
+            guess_T = np.zeros(no_of_grid_points)
 
         # checking the value of Sp for consistency
         if self.Sp <= 0.0:
@@ -58,14 +56,14 @@ class TempDistribution:
                         a[i] = (self.ke / (delta_x_e / 2.0)) - self.Sp * (delta_x / 2.0)
                         a[i + 1] = (self.ke / (delta_x_e / 2.0)) * (-1)
 
-                        b[i] = (self.Sc1 + self.Sc2 * Tguess[i]) * (delta_x / 2.0)
+                        b[i] = (self.Sc1 + self.Sc2 * guess_T[i]) * (delta_x / 2.0)
 
                     elif i == (no_of_grid_points - 1):  # east side boundary grid point
 
                         a[i] = (self.kw / (delta_x_w / 2.0)) - self.Sp * (delta_x / 2.0)
                         a[i - 1] = (self.kw / (delta_x_w / 2.0)) * (-1)
 
-                        b[i] = (self.Sc1 + self.Sc2 * Tguess[i]) * (delta_x / 2.0)
+                        b[i] = (self.Sc1 + self.Sc2 * guess_T[i]) * (delta_x / 2.0)
 
                     else:  # inner grid points within inner CVs
 
@@ -81,7 +79,7 @@ class TempDistribution:
                         a[i] = (self.kw / del_x_w) + (self.ke / del_x_e) - self.Sp * delta_x
                         a[i + 1] = (self.ke / del_x_e) * (-1)
 
-                        b[i] = (self.Sc1 + self.Sc2 * Tguess[i]) * delta_x
+                        b[i] = (self.Sc1 + self.Sc2 * guess_T[i]) * delta_x
 
                     matrix[i] = a
 
@@ -109,7 +107,7 @@ class TempDistribution:
                 solution = np.linalg.solve(matrix, b)  # NumPy method to solve system of linear eqns.
 
                 # calculating residues in every iteration for each grid point within CVs
-                residue[:] = abs(solution[:] - Tguess[:])
+                residue[:] = abs(solution[:] - guess_T[:])
 
                 print ('Residue : ',residue)
 
@@ -121,7 +119,7 @@ class TempDistribution:
 
                 else:
 
-                    Tguess = solution  # now solution becomes Tguess for the next iteration
+                    guess_T = solution  # now solution becomes guess_T for the next iteration
                     # ............................
         else:
             raise ValueError('Value of Sp should be negative for physical consistency of the discretisation !!')
