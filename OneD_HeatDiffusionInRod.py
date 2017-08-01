@@ -40,7 +40,7 @@ class TempDistribution:
         # checking the value of Sp for consistency
         if self.Sp <= 0.0:
 
-            while (noConvergence == True):
+            while (True):
 
                 # these values and data structures will be re-initialised in every iteration
                 matrix = np.zeros((no_of_grid_points, no_of_grid_points))
@@ -109,20 +109,15 @@ class TempDistribution:
                 solution = np.linalg.solve(matrix, b)  # NumPy method to solve system of linear eqns.
 
                 # calculating residues in every iteration for each grid point within CVs
-                for j in range(no_of_grid_points):
-                    residue[j] = abs(solution[j] - Tguess[j])
+                residue[:] = abs(solution[:] - Tguess[:])
 
-                print ('residue : ',residue)
+                print ('Residue : ',residue)
 
                 # checking convergence.........
-                for j in range(len(residue)):
+                if all(residue[:] < 0.01):
 
-                    if residue[j] < 0.01:
-                        convergence_count += 1
-
-                if convergence_count == no_of_grid_points:
-
-                    noConvergence = False
+                    print ('Convergence !!!!! ')
+                    break
 
                 else:
 
