@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-
 class TempDistribution:
     def __init__(self, no_of_CV = 0, len_of_rod = 0.0, kw = 0.0, ke = 0.0, source = [0.0, 0.0, 0.0], \
                  bc = dict(T1 = (0.0,0), T2 = (0.0,0), q = (0.0)), h = 0.0, amb_T = 0.0):
@@ -132,7 +131,7 @@ class TempDistribution:
 
 
 
-
+#post processing
 t_d = TempDistribution(no_of_CV = 17, len_of_rod = 1.0, kw = 1.0, ke = 1.0, source = [500.0, 25.0, -50.0], \
                  bc = dict(T1 = (100.0,0), T2 = (0.0,16), q = (0.0,18)))
 solution = t_d.temp_distribution()
