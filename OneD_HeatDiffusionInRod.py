@@ -1,142 +1,159 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 class TempDistribution:
-    def __init__(self, no_of_CV = 0, len_of_rod = 0.0, kw = 0.0, ke = 0.0, source = [0.0, 0.0, 0.0], \
-                 bc = dict(T1 = (0.0,0), T2 = (0.0,0), q = (0.0)), h = 0.0, amb_T = 0.0):
+    def __init__(self, no_of_CV=0, len_of_rod=0.0, kw=0.0, ke=0.0, source=(0.0, 0.0, 0.0),
+                 T=((0.0, 0),), q=((0.0, 0),), h=0.0, amb_T=0.0, row=0.0, cp=0.0):
 
         self.no_of_CV = no_of_CV
         self.len_of_rod = len_of_rod
         self.kw = kw
         self.ke = ke
-        self.h = h #heat transfer coeff.
-        self.amb_T = amb_T #ambient temp.
+        self.h = h  # heat transfer coeff.
+        self.row = row
+        self.cp = cp
+        self.amb_T = amb_T  # ambient temp.
         # Linear source term of the form S = Sc+SpTp where Sp should be (-)ve
-        self.Sc1 = source[0]
-        self.Sc2 = source[1]
-        self.Sp = source[2]
+        self.Sc1, self.Sc2, self.Sp = source
         # ....................
-        self.bc = bc
+        self.T = T
+        self.q = q
+        # ....................
 
-    def temp_distribution(self, guess_T = None, large_num = 1e+10):
+    def temp_distribution(self, temp_t0=0.0, guess_temp=0.0, large_num=1e+10, time=1.0, delta_t=1.0):
 
-        global matrix
+        result = []
+
         delta_x = self.len_of_rod / self.no_of_CV  # width of each inner CV
         delta_x_e = delta_x
         delta_x_w = delta_x
 
-        inner_grid_points = self.no_of_CV
         no_of_grid_points = self.no_of_CV + 2
 
-        solution = np.zeros(no_of_grid_points)
+        initial_T = np.zeros(no_of_grid_points)
+        guess_T = np.zeros(no_of_grid_points)
 
-        # assigning some default value to Tguess if it is not provided by the user
-        if guess_T == None:
-            guess_T = np.zeros(no_of_grid_points)
+        t = 0.0  # iterating variable for time loop
+
+        # calculating the value of a_p^o: coeff. of time neighbour for every grid point
+        a_po = self.row * self.cp * delta_x / delta_t
+
+        # assigning initial value to the temperature array
+        if temp_t0 != 0.0:
+            initial_T += temp_t0
+
+        # guess temperature at every grid point in case of temp. dependent heat source
+        if guess_temp != 0.0:
+            guess_T += guess_temp
 
         # checking the value of Sp for consistency
         if self.Sp <= 0.0:
 
-            while (True):
+            while t < time:
 
-                # these values and data structures will be re-initialised in every iteration
-                matrix = np.zeros((no_of_grid_points, no_of_grid_points))
-                residue = np.zeros(no_of_grid_points)
-                b = np.zeros(no_of_grid_points)
-                convergence_count = 0
-                # .......................................................
+                print('!!!!!!!!!!!!  Time = ', t, ' sec. !!!!!!!!!!!!! ', '\n')
 
-                for i in range(0, no_of_grid_points):  # loop over grid points within each CV
+                while True:
 
-                    a = np.zeros(no_of_grid_points)
+                    # these values and data structures will be re-initialised in every iteration
+                    matrix = np.zeros((no_of_grid_points, no_of_grid_points))
+                    residue = np.zeros(no_of_grid_points)
+                    b = np.zeros(no_of_grid_points)
+                    # .......................................................
 
-                    if i == 0: # west side boundary grid point
+                    for i in range(0, no_of_grid_points):  # loop over grid points within each CV
 
-                        a[i] = (self.ke / (delta_x_e / 2.0)) - self.Sp * (delta_x / 2.0)
-                        a[i + 1] = (self.ke / (delta_x_e / 2.0)) * (-1)
+                        a = np.zeros(no_of_grid_points)
 
-                        b[i] = (self.Sc1 + self.Sc2 * guess_T[i]) * (delta_x / 2.0)
+                        if i == 0:  # west side boundary grid point
 
-                    elif i == (no_of_grid_points - 1):  # east side boundary grid point
+                            a[i] = (self.ke / (delta_x_e / 2.0)) - self.Sp * (delta_x / 2.0) + a_po
+                            a[i + 1] = (self.ke / (delta_x_e / 2.0)) * (-1)
 
-                        a[i] = (self.kw / (delta_x_w / 2.0)) - self.Sp * (delta_x / 2.0)
-                        a[i - 1] = (self.kw / (delta_x_w / 2.0)) * (-1)
+                            b[i] = (self.Sc1 + self.Sc2 * guess_T[i]) * (delta_x / 2.0) + a_po * initial_T[i]
 
-                        b[i] = (self.Sc1 + self.Sc2 * guess_T[i]) * (delta_x / 2.0)
+                        elif i == (no_of_grid_points - 1):  # east side boundary grid point
 
-                    else:  # inner grid points within inner CVs
+                            a[i] = (self.kw / (delta_x_w / 2.0)) - self.Sp * (delta_x / 2.0) + a_po
+                            a[i - 1] = (self.kw / (delta_x_w / 2.0)) * (-1)
 
-                        del_x_w = delta_x_w
-                        del_x_e = delta_x_e
+                            b[i] = (self.Sc1 + self.Sc2 * guess_T[i]) * (delta_x / 2.0) + a_po * initial_T[i]
 
-                        if i == 1:
-                            del_x_w = delta_x_w / 2.0
-                        elif i == no_of_grid_points - 2:
-                            del_x_e = delta_x_e / 2.0
+                        else:  # inner grid points within inner CVs
 
-                        a[i - 1] = (self.kw / del_x_w) * (-1)
-                        a[i] = (self.kw / del_x_w) + (self.ke / del_x_e) - self.Sp * delta_x
-                        a[i + 1] = (self.ke / del_x_e) * (-1)
+                            del_x_w = delta_x_w
+                            del_x_e = delta_x_e
 
-                        b[i] = (self.Sc1 + self.Sc2 * guess_T[i]) * delta_x
+                            if i == 1:
+                                del_x_w = delta_x_w / 2.0
+                            elif i == no_of_grid_points - 2:
+                                del_x_e = delta_x_e / 2.0
 
-                    matrix[i] = a[:]
+                            a[i - 1] = (self.kw / del_x_w) * (-1)
+                            a[i] = (self.kw / del_x_w) + (self.ke / del_x_e) - self.Sp * delta_x + a_po
+                            a[i + 1] = (self.ke / del_x_e) * (-1)
 
-                #boundary condition implementation:
-                for k, v in self.bc.items():
-                    if (k == 'T1' or k == 'T2') and v[0] != 0.0: # Drichlet
-                        index = v[1]
-                        matrix[index][index] += large_num
-                        b[index] = v[0] * (large_num / matrix[index][index])
-                        matrix[index] /= matrix[index][index]
+                            b[i] = (self.Sc1 + self.Sc2 * guess_T[i]) * delta_x + a_po * initial_T[i]
 
-                    elif k == 'q' and (self.bc['T1'][0] == 0.0 or self.bc['T2'][0] == 0.0):
-                        index = v[1]
-                        if index == 0 or index == (no_of_grid_points - 1): # Neumann
-                            if v[0] != 0.0 and self.h == 0.0:
-                                b[index] = b[index] + self.q
+                        matrix[i] = a[:]
 
-                            elif v[0] == 0.0 and self.h != 0.0 and self.amb_T != 0.0: # Mixed type
-                                b[index] = b[index] + self.h * self.amb_T
-                                matrix[index][index] += self.h
+                    # boundary condition implementation:
+                    for var in self.T:
+                        temp_val, grid_val = var
+                        if temp_val != 0.0: # temperatures are specified at the boundaries
+                            matrix[grid_val][grid_val] += large_num
+                            b[grid_val] = temp_val * (large_num / matrix[grid_val][grid_val])
+                            matrix[grid_val] /= matrix[grid_val][grid_val]
 
+                    for var in self.q:
+                        q_val, grid_val = var
+                        if grid_val == 0 or grid_val == (no_of_grid_points - 1):
+                            if q_val != 0.0: # direct implementation of heat flux at boundaries
+                                b[grid_val] = b[grid_val] + q_val
+                            elif q_val == 0.0 and self.h != 0.0 and self.amb_T != 0.0:# heat flux given as a fn of heat transfer coeff.
+                                b[grid_val] = b[grid_val] + self.h * self.amb_T
+                                matrix[grid_val][grid_val] += self.h
                         else:
                             raise ValueError('heat flux can only be applied at outermost grid points !!')
 
-                solution = np.linalg.solve(matrix, b)  # NumPy method to solve system of linear eqns.
+                    solution = np.linalg.solve(matrix, b)  # NumPy method to solve system of linear eqns.
 
-                # calculating residues in every iteration for each grid point within CVs
-                residue[:] = abs(solution[:] - guess_T[:])
+                    # calculating residues in every iteration for each grid point within CVs
+                    residue[:] = abs(solution[:] - guess_T[:])
 
-                print ('Residue : ',residue)
+                    print('Residue : ', residue)
 
-                # checking convergence.........
-                if all(residue[:] < 0.01):
+                    # checking convergence.........
+                    if all(residue < 0.01):
 
-                    print ('Convergence !!!!! ')
-                    break
+                        print('!!!!!!!!!!!! Convergence !!!!!!!!!!!!! ', '\n')
+                        result.append(solution[:])
+                        break
 
-                else:
+                    else:
 
-                    guess_T = solution[:]  # now solution becomes guess_T for the next iteration
-                    # ............................
+                        guess_T = solution[:]  # now solution becomes guess_T for the next iteration
+                        # ............................
+
+                t += delta_t
         else:
             raise ValueError('Value of Sp should be negative for physical consistency of the discretisation !!')
 
-        return (solution)
+        return result
 
 
+# post processing
+t_d = TempDistribution(no_of_CV=5, len_of_rod=0.02, kw=0.5, ke=0.5, source=(1000.0e+03, 0.0, 0.0),
+                       T=((100.0, 0), (200.0, 6)), row=8960.0, cp=385.0)
+sol = t_d.temp_distribution(time=5.0, delta_t=1.0)
 
+X = np.linspace(0, 2.0, 7)
 
-
-
-
-#post processing
-t_d = TempDistribution(no_of_CV = 17, len_of_rod = 1.0, kw = 1.0, ke = 1.0, source = [500.0, 25.0, -50.0], \
-                 bc = dict(T1 = (100.0,0), T2 = (0.0,16), q = (0.0,18)))
-solution = t_d.temp_distribution()
-print(solution)
-X = np.linspace(0, 1.0, 19)
-Y = solution[:]
-plt.plot(X, Y)
-plt.show()
+for i in range(0, len(sol)):
+    plt.figure(1)
+    print('!!!!!!!!!!!!!! solution !!!!!!!!!!!!', '\n')
+    print(sol[i], '\n')
+    Y = sol[i]
+    plt.plot(X, Y)
+    plt.show()
